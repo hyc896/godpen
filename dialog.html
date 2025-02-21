@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>需求输入与AI聊天</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="chat">
+        <div id="messages"></div>
+        <div class="input-container">
+            <input type="text" id="input" placeholder="请输入您的问题...">
+            <button id="send-button">↩</button>
+        </div>
+    </div>
+    <script>
+        let isConnecting = false;
+        let ws;
+        // const ws = new WebSocket("ws://localhost:8766");
+        const messagesDiv = document.getElementById("messages");
+        const input = document.getElementById("input");
+        const sendButton = document.getElementById("send-button");
+        function connectWebSocket() {
+    if (isConnecting) return;
+    isConnecting = true;
+    
+    ws = new WebSocket("ws://localhost:8766");
+
+    ws.onopen = () => {
+        console.log("Connected to WebSocket server");
+        isConnecting = false;
+    };
+
+    ws.onclose = () => {
+        console.log("Disconnected from WebSocket server. Trying to reconnect...");
+        isConnecting = false;
+        setTimeout(connectWebSocket, 2000); // 2秒后尝试重连
+    };
+
+    ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
+    };
+
+    ws.onmessage = (event) => {
+        // 流式消息处理（使用已创建的回复容器）
+        if (window.currentMessageDiv) {
+            // 追加新内容到当前消息容器
+            window.currentMessageDiv.insertBefore(
+                document.createTextNode(event.data),
+                window.currentMessageDiv.lastChild
+            );
+            
+            // 自动滚动到底部
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+    };
+}
+
+// 发送消息函数也需要修改
+const sendMessage = () => {
+    const userMessage = input.value;
+    if (userMessage.trim() !== "" && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(userMessage);
+        // 创建用户消息容器
+        const userMsgDiv = document.createElement("div");
+        userMsgDiv.textContent = `用户: ${userMessage}`;
+        messagesDiv.appendChild(userMsgDiv);
+        input.value = "";
+        
+        // 为AI回复创建新容器（带样式类）
+        window.currentMessageDiv = document.createElement("div");
+        window.currentMessageDiv.className = "ai-message";
+        messagesDiv.appendChild(window.currentMessageDiv);
+        
+        // 添加光标动画
+        const cursor = document.createElement("span");
+        cursor.className = "typing-cursor";
+        cursor.textContent = "|";
+        window.currentMessageDiv.appendChild(cursor);
+        
+        // 添加间隔元素
+        const spacer = document.createElement("div");
+        spacer.className = "message-spacer";
+        messagesDiv.appendChild(spacer);
+    } else if (!ws || ws.readyState !== WebSocket.OPEN) {
+        console.log("WebSocket is not connected. Message not sent.");
+        const message = document.createElement("div");
+        message.textContent = "连接已断开，正在尝试重新连接...";
+        message.style.color = "red";
+        messagesDiv.appendChild(message);
+    }
+};
+
+// 初始连接
+connectWebSocket();
+        // // 接收消息
+        // ws.onmessage = (event) => {
+        //     const message = document.createElement("div");
+        //     message.textContent = `AI: ${event.data}`;
+        //     messagesDiv.appendChild(message);
+        // };
+
+        // // 发送消息
+        // const sendMessage = () => {
+        //     const userMessage = input.value;
+        //     if (userMessage.trim() !== "") {
+        //         ws.send(userMessage);
+        //         const message = document.createElement("div");
+        //         message.textContent = `用户: ${userMessage}`;
+        //         messagesDiv.appendChild(message);
+        //         input.value = "";
+        //     }
+        // };
+
+        sendButton.addEventListener("click", sendMessage);
+        input.addEventListener("keypress", (event) => {
+            if (event.key === "Enter") {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
